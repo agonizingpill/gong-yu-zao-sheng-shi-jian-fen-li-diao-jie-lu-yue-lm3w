@@ -16,14 +16,25 @@
 |角色|账号|页面与权限|典型动作|
 |---|---|---|---|
 |协调员|operator|收件、事件、分离、签字凭据、整改/复验登记|登记授权与线下交付收据|
-|协调主管|supervisor|全部页面及受控流转、审计、演示时钟|现场归因、协议生效、处理复发、观察与结案|
-|只读访客|viewer|六页只读；所有写接口403|阅读匿名卷宗与协议状态|
+|协调主管|supervisor|全部页面及受控流转、审计、演示时钟|现场归因、协议生效、处理复发、观察与结案、结案样例引用授权与相似重算|
+|只读访客|viewer|六页只读；所有写接口403|阅读匿名卷宗、协议状态与推荐依据|
 
 三个账号密码均为 `Quiet2026!`。JWT有效8小时；密码PBKDF2存储。只使用模拟别名，不含真实住户资料。
 
 ## 一天工作剧本
 
 以演示时钟2026-11-18 16:00开始。08:30查QT031访客青叶、3栋北侧，11月17日22:30起六条窗台合成事件；09:00核对授权凭据QTC-031；09:20在成分页提交分离，280训练/80留出；10:00主管填写设备启停和减振连接件现场证据；10:30起草QTA协议（22:00–07:00，能量阈值10，观察2天），尝试无签字生效得到拒绝；11:00双方线下签字后登记凭据QTS-031，主管生效；14:00登记更换减振垫整改与收据QTR-031；推进演示时钟，在22:30采集总能量1.6的新事件，复验通过后观察；到期核对无复发后匿名交接，下载 `quiet-handover.json`。另用QT032测试撤回/无授权拦截，用新的超阈值夜间事件测试复发重开。实测脚本包含完整时间序列。
+
+## 低频投诉的相似结案样例
+
+新投诉没有历史可比时，主管可在调解页按当前卷的有效采样重算“相似结案样例”。种子额外带一卷已结案历史样例QT029（默认**未**授权引用）。
+
+1. 每条采样先换算为8频带的占比，再对**卷内多次采样取均值**；相似度用余弦，只比较分布形状，整体音量成比例放大或缩小不改变相似度与排名。来源卷不足2条采样不参与比较。
+2. 仅在**达到相似度阈值**（默认0.90）的卷宗中按相似度排名；不达阈值的推荐位置**留空**，不用差太远的卷宗补位。阈值与位置数（1–5）由主管在重算时填写。
+3. 候选卷必须**已匿名结案**，并由主管在结案页**另行授权引用**；业务监测授权不等于引用授权。未授权、已撤回或已重开的卷宗不参与排名。
+4. 打开做法时只展示匿名整改内容：编号、别名、楼栋、参与方与收据原文都不返回，责任方简化为甲方/乙方；调解页同时给出本卷与样例的平均成分占比作为推荐依据。
+5. 撤回引用授权或重开结案卷，都会把指向该卷的有效推荐标为失效，旧推荐无法再打开做法；重算时由其他合格卷补位，不足处继续留空。撤回与重算并发时以投诉根行锁串行，先提交者生效。
+6. 每次重算生成新批次，同卷只有最新一批可打开；旧批由新一轮替代，查看时提示重新查看当前推荐。
 
 ## 快速启动
 
@@ -51,12 +62,12 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 ## 结构与本地开发
 
-`backend/src/models.py` 是投诉/事件/归因/协议/签字/整改/复验/复发/结案关系；case/evidence/agreement/resolution服务分别处理业务，routes只解析请求与授权；两层中间件负责追踪及限流；全局约束错误409。`frontend/src/pages/` 每页负责一种工作任务，`components/common.js` 共享卷宗条、协议条、频带图与成分条，api/store/utils分别负责请求、选卷状态和格式/下载。
+`backend/src/models.py` 是投诉/事件/归因/协议/签字/整改/复验/复发/结案关系，另含结案样例引用授权与推荐批次；case/evidence/agreement/resolution服务分别处理业务，`similar_service.py` 负责推荐资格、重算、失效与匿名做法，`similarity.py` 只做占比归一、余弦与排名；routes只解析请求与授权；两层中间件负责追踪及限流；全局约束错误409。`frontend/src/pages/` 每页负责一种工作任务，`components/common.js` 共享卷宗条、协议条、频带图与成分条，api/store/utils分别负责请求、选卷状态和格式/下载。
 
-本地Python3.12虚拟环境安装backend/requirements.txt，设置 `DATABASE_URL`（MySQL8），`REDIS_URL` 后在backend目录执行 `uvicorn src.app:app --reload`；前端可用Nginx配置同源代理或直接build容器。初始schema见 `backend/migrations/001_schema.md`，create_all不会自动升级已有列。
+本地Python3.12虚拟环境安装backend/requirements.txt，设置 `DATABASE_URL`（MySQL8），`REDIS_URL` 后在backend目录执行 `uvicorn src.app:app --reload`；前端可用Nginx配置同源代理或直接build容器。初始schema见 `backend/migrations/001_schema.md`，相似推荐新增表见 `002_similar_cases.md`，create_all不会自动升级已有列。
 
 环境变量：`FRONTEND_PORT`18239、`BACKEND_PORT`19239、`DB_PORT`17739、`COMPOSE_PROJECT_NAME`quiet-mediation、`COMPOSE_SUBNET`10.221.40.0/24、`SEED_DEMO`true、`JWT_SECRET`仅演示默认，部署时自行替换。数据库/Redis/artifacts均用命名卷。所有时间为无时区演示本地时间；主管可向前推进独立演示时钟，真实生产需换可信服务器时钟。
 
-共享枚举 `ROLES`、`CASE_STATES`、`SOURCE_TYPES`、`BANDS` 在 `backend/src/constants.py` 与 `frontend/src/constants.js` 一一对应；后端 `/enums` 暴露当前字典。测试、截图与报告单独位于 `../../test-artifacts/gb-1040/`，不混入源码。
+共享枚举 `ROLES`、`CASE_STATES`、`SOURCE_TYPES`、`BANDS` 在 `backend/src/constants.py` 与 `frontend/src/constants.js` 一一对应；后端 `/enums` 暴露当前字典，并附相似推荐默认指标、阈值与位置数。测试、截图与报告单独位于 `../../test-artifacts/gb-1040/`，不混入源码。
 
 License: MIT。

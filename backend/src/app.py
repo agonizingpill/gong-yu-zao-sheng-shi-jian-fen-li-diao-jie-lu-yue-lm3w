@@ -12,7 +12,8 @@ from .middlewares import TraceMiddleware,LimitMiddleware
 from .case_routes import router as cases
 from .evidence_routes import router as evidence
 from .agreement_routes import router as agreements
-from .constants import ROLES,CASE_STATES,SOURCE_TYPES,BANDS
+from .similar_routes import router as similar
+from .constants import ROLES,CASE_STATES,SOURCE_TYPES,BANDS,REFERENCE_METRIC,REFERENCE_MIN_SIMILARITY,REFERENCE_LIMIT
 @asynccontextmanager
 async def lifespan(app):
     Base.metadata.create_all(engine)
@@ -37,5 +38,5 @@ def login(data:Login,db=Depends(session)):
 @app.get('/auth/me')
 def me(u=Depends(current)):return {'username':u.username,'role':u.role}
 @app.get('/enums')
-def enums(u=Depends(current)):return {'roles':ROLES,'case_states':CASE_STATES,'source_types':SOURCE_TYPES,'bands':BANDS}
-app.include_router(cases);app.include_router(evidence);app.include_router(agreements)
+def enums(u=Depends(current)):return {'roles':ROLES,'case_states':CASE_STATES,'source_types':SOURCE_TYPES,'bands':BANDS,'reference':{'metric':REFERENCE_METRIC,'min_similarity':REFERENCE_MIN_SIMILARITY,'limit':REFERENCE_LIMIT}}
+app.include_router(cases);app.include_router(evidence);app.include_router(agreements);app.include_router(similar)

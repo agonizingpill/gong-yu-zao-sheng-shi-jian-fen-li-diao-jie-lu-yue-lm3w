@@ -1,6 +1,7 @@
 from sqlalchemy import select,func
 from .models import Complaint,NoiseEvent,Agreement,Audit,DemoClock
 from .common import require,lock_case,get,record,now,dump
+from . import similar_service
 
 def list_cases(db):
     rows=db.scalars(select(Complaint).order_by(Complaint.id)).all()
@@ -19,4 +20,7 @@ def advance(db,user,data):
     clock.at=data.at;record(db,user,'clock.advance',1,data.at.isoformat());db.commit();return {'at':clock.at}
 def reopen(db,user,id,note):
     case=lock_case(db,id);require(case.status=='closed','只可重开已结案投诉')
-    case.status='monitoring';record(db,user,'complaint.reopen',id,note);db.commit();return dump(case)
+    case.status='monitoring'
+    invalidated=similar_service.revoke_on_reopen(db,user,case)
+    record(db,user,'complaint.reopen',id,f'{note}；旧引用失效{invalidated}条')
+    db.commit();return dump(case)

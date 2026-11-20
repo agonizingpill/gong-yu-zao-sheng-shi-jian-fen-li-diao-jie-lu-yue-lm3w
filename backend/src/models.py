@@ -111,3 +111,40 @@ class Closure(Base):
     agreement_id:Mapped[int]=mapped_column(ForeignKey('agreements.id'),unique=True)
     note:Mapped[str]=mapped_column(String(400))
     closed_at:Mapped[datetime]=mapped_column(DateTime)
+class ReferenceAuthorization(Base):
+    """结案卷被用作相似样例的单独授权；追加留痕，最新一条为当前状态。"""
+    __tablename__='reference_authorizations'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    complaint_id:Mapped[int]=mapped_column(ForeignKey('complaints.id'),index=True)
+    granted:Mapped[bool]=mapped_column(Boolean)
+    note:Mapped[str]=mapped_column(String(300))
+    actor:Mapped[str]=mapped_column(String(60))
+    created_at:Mapped[datetime]=mapped_column(default=datetime.utcnow)
+class SimilarCaseBatch(Base):
+    """一次重算的推荐快照；只保留最新一批为current，旧批不再可打开做法。"""
+    __tablename__='similar_case_batches'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    complaint_id:Mapped[int]=mapped_column(ForeignKey('complaints.id'),index=True)
+    method:Mapped[str]=mapped_column(String(60))
+    min_similarity:Mapped[float]=mapped_column(Float)
+    slot_limit:Mapped[int]=mapped_column(Integer)
+    target_composition:Mapped[list|None]=mapped_column(JSON,nullable=True)
+    target_sample_count:Mapped[int]=mapped_column(Integer,default=0)
+    reason:Mapped[str]=mapped_column(String(200),default='')
+    state:Mapped[str]=mapped_column(String(20),default='current')
+    actor:Mapped[str]=mapped_column(String(60))
+    created_at:Mapped[datetime]=mapped_column(default=datetime.utcnow)
+class SimilarCaseRecommendation(Base):
+    __tablename__='similar_case_recommendations'
+    __table_args__=(UniqueConstraint('batch_id','rank',name='one_recommendation_rank'),UniqueConstraint('batch_id','source_complaint_id',name='one_recommendation_source'))
+    id:Mapped[int]=mapped_column(primary_key=True)
+    batch_id:Mapped[int]=mapped_column(ForeignKey('similar_case_batches.id'),index=True)
+    source_complaint_id:Mapped[int]=mapped_column(ForeignKey('complaints.id'),index=True)
+    rank:Mapped[int]=mapped_column(Integer)
+    similarity:Mapped[float]=mapped_column(Float)
+    target_sample_count:Mapped[int]=mapped_column(Integer)
+    source_sample_count:Mapped[int]=mapped_column(Integer)
+    target_composition:Mapped[list]=mapped_column(JSON)
+    source_composition:Mapped[list]=mapped_column(JSON)
+    state:Mapped[str]=mapped_column(String(20),default='valid')
+    invalid_reason:Mapped[str]=mapped_column(String(200),default='')
